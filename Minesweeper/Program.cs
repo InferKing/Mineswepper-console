@@ -1,22 +1,26 @@
 ﻿using System;
 using System.Collections.Generic;
 
-int rX = 5, rY = 5, cM = 2;
-Model model = new Model(rX,rY, cM);
-model.ShowModel(true);
-while (model.IsAlive())
+int rX = 9, rY = 9, cM = 10, countFailure = 0, razm = 1000;
+for (int i = 0; i < razm; i++)
 {
-    if (model.IsAllHide())
+    Model model = new Model(rX, rY, cM);
+    while (model.IsAlive() == 0)
     {
-        model.DoRandomMove();
+        if (model.IsAllHide())
+        {
+            model.DoRandomMove();
+        }
+        else
+        {
+            model.DoMove();
+        }
     }
-    else
-    {
-        model.DoMove();
-    }
-    model.ShowModel(false);
-    Console.ReadLine();
+    if (model.IsAlive() == -1) countFailure += 1;
 }
+
+Console.WriteLine($"Процент выигрыша = {(razm - (float)countFailure) / razm * 100}");
+
 enum CellType
 {
     Number,
@@ -128,28 +132,44 @@ class Model
             x = new Random().Next(0, table.GetLength(0));
             y = new Random().Next(0, table.GetLength(1));
         }
-        while (!table[x, y].isHide);
+        while (!table[x, y].isHide && table[x,y].isFlag);
         CheckZero(x, y);
         table[x, y].isHide = false;
     }
-    public bool IsAlive()
+    public int IsAlive()
     {
+        int c = 0, c1 = 0;
         for (int i = 0; i < table.GetLength(0); i++)
         {
             for (int j = 0; j < table.GetLength(1); j++)
             {
-                if (!table[i,j].isHide && table[i,j].type is CellType.Mine)
+                if (table[i,j].type is CellType.Number && !table[i,j].isHide)
                 {
-                    return false;
+                    c1 += 1;
+                }
+                if (table[i,j].type is CellType.Mine && table[i,j].isFlag)
+                {
+                    c += 1;
+                }
+                if (table[i,j].type is CellType.Mine && !table[i,j].isHide)
+                {
+                    return -1;
                 }
             }
         }
-        return true;
+        if (c != cMines || c1 != table.GetLength(0) * table.GetLength(1) - cMines)
+        {
+            return 0;
+        }
+        else
+        {
+            return 1;
+        }
     }
     public void DoMove()
     {
         CalcInfoCell();
-        int min = 100;
+        bool noMove = false;
         List<(int, int)> coords = new List<(int, int)>();
         if (!HasMove())
         {
@@ -161,8 +181,39 @@ class Model
         {
             for (int j = 0; j < table.GetLength(1); j++)
             {
-                
+                // Console.WriteLine($"{i},{j} hides = {table[i, j].info.hides}, flags = {table[i, j].info.flags}");
+                if (table[i,j].info.hides == (table[i,j].value - table[i,j].info.flags) && !table[i,j].isHide)
+                {
+                    coords = GetCellsCoordNear(i, j);
+                    foreach (var it in coords)
+                    {
+                        if (table[it.Item1, it.Item2].isHide && !table[it.Item1, it.Item2].isFlag)
+                        {
+                            table[it.Item1, it.Item2].isFlag = true;
+                            noMove = true;
+                        }
+                    }
+                    CalcInfoCell();
+                }
+                if (table[i,j].value - table[i,j].info.flags == 0)
+                {
+                    coords = GetCellsCoordNear(i, j);
+                    foreach (var it in coords)
+                    {
+                        if (table[it.Item1, it.Item2].isHide && !table[it.Item1, it.Item2].isFlag)
+                        {
+                            noMove = true;
+                            table[it.Item1, it.Item2].isHide = false;
+                        }
+                    }
+                    CalcInfoCell();
+                }
             }
+        }
+        if (!noMove)
+        {
+            DoRandomMove();
+            CalcInfoCell();
         }
     }
     private void CalcInfoCell()
@@ -245,7 +296,7 @@ class Model
     private void CheckZero(int x, int y)
     {
         if (x >= table.GetLength(0) || x < 0 || y >= table.GetLength(1) || y < 0) return;
-        if (table[x, y].value == 0 && table[x, y].isHide)
+        if (table[x, y].value == 0 && table[x, y].isHide && table[x,y].type is CellType.Number)
         {
             table[x, y].isHide = false;
             CheckZero(x + 1, y);
@@ -268,7 +319,7 @@ class Model
             table[c.Item1, c.Item2].isHide = false;
         }
     }
-    private bool HasMove()
+    private bool HasMove() // use for cases when can't get info about mines
     {
         for (int i = 0; i < table.GetLength(0); i++)
         {
